@@ -216,7 +216,11 @@ function renderCalendar() {
       cell.className = `date-cell ${nextStatus}`;
       cell.innerHTML = `<span class="day-number">${day}</span><span class="status-label">${statusLabels[nextStatus]}</span>`;
       calendarState.set(dateKey, nextStatus);
+      renderCalendar();
       await saveRemoteState();
+      window.setTimeout(() => {
+        loadRemoteState();
+      }, 800);
     });
 
     calendarGrid.appendChild(cell);
@@ -246,6 +250,14 @@ function startAutoSync() {
     if (document.visibilityState === 'visible') {
       loadRemoteState();
     }
+  });
+
+  window.addEventListener('focus', () => {
+    loadRemoteState();
+  });
+
+  window.addEventListener('online', () => {
+    loadRemoteState();
   });
 }
 
