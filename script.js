@@ -2,6 +2,10 @@ const monthLabel = document.getElementById('month-label');
 const weekdayRow = document.getElementById('weekday-row');
 const calendarGrid = document.getElementById('calendar-grid');
 
+function hasCalendarDom() {
+  return Boolean(monthLabel && weekdayRow && calendarGrid);
+}
+
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const statusOrder = ['available', 'hold', 'soldout'];
 const statusLabels = {
@@ -11,70 +15,161 @@ const statusLabels = {
 };
 const STORAGE_URL = 'https://jsonblob.com/api/jsonBlob/019fcd22-c843-7174-b3c0-bbe7b6611408';
 const LOCAL_STORAGE_KEY = 'vagamon-bookings-state';
+const SESSION_STORAGE_KEY = 'vagamon-bookings-session-state';
+const AUTO_SYNC_INTERVAL_MS = 5000;
 
 const today = new Date();
 const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 const calendarState = new Map();
 
-function loadLocalState() {
+function readStoredState(storage, storageKey) {
+  if (!storage) {
+    return null;
+  }
+
   try {
-    const savedState = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const savedState = storage.getItem(storageKey);
     if (!savedState) {
-      return;
+      return null;
     }
 
-    const parsedState = JSON.parse(savedState);
+    return JSON.parse(savedState);
+  } catch (error) {
+    console.warn('Unable to read stored calendar state:', error);
+    return null;
+  }
+}
+
+function persistState(storage, storageKey, stateObject) {
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.setItem(storageKey, JSON.stringify(stateObject));
+  } catch (error) {
+    console.warn('Unable to persist calendar state:', error);
+  }
+}
+
+function loadLocalState() {
+  const storageSources = [
+    { storage: window.localStorage, storageKey: LOCAL_STORAGE_KEY },
+    { storage: window.sessionStorage, storageKey: SESSION_STORAGE_KEY }
+  ];
+
+  storageSources.some(({ storage, storageKey }) => {
+    const parsedState = readStoredState(storage, storageKey);
+    if (!parsedState) {
+      return false;
+    }
+
     Object.entries(parsedState).forEach(([dateKey, status]) => {
       if (statusOrder.includes(status)) {
         calendarState.set(dateKey, status);
       }
     });
-  } catch (error) {
-    console.warn('Unable to load local calendar state:', error);
-  }
+
+    return Object.keys(parsedState).length > 0;
+  });
 }
 
 function saveLocalState() {
   const stateObject = Object.fromEntries(calendarState);
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stateObject));
+  persistState(window.localStorage, LOCAL_STORAGE_KEY, stateObject);
+  persistState(window.sessionStorage, SESSION_STORAGE_KEY, stateObject);
 }
 
 async function loadRemoteState() {
+  if (!hasCalendarDom()) {
+    return;
+  }
+
   try {
-    const response = await fetch(STORAGE_URL, { cache: 'no-store' });
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+    const response = await fetch(STORAGE_URL, { cache: 'no-store', signal: controller.signal });
+    window.clearTimeout(timeoutId);
+
     if (!response.ok) {
       throw new Error('Unable to fetch remote state');
     }
 
     const data = await response.json();
-    Object.entries(data).forEach(([dateKey, status]) => {
-      if (statusOrder.includes(status)) {
-        calendarState.set(dateKey, status);
-      }
-    });
+    const hasChanges = applyRemoteState(data);
     saveLocalState();
+
+    if (hasChanges) {
+      renderCalendar();
+    }
   } catch (error) {
-    loadLocalState();
+    if (error.name !== 'AbortError') {
+      console.warn('Unable to sync calendar state remotely:', error);
+    }
   }
 }
 
 async function saveRemoteState() {
-  const stateObject = Object.fromEntries(calendarState);
+  if (!hasCalendarDom()) {
+    return;
+  }
+
+  const stateObject = getStateObject();
   saveLocalState();
 
+  if (typeof window !== 'undefined' && window.navigator && window.navigator.onLine === false) {
+    return;
+  }
+
   try {
-    await fetch(STORAGE_URL, {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+    const response = await fetch(STORAGE_URL, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(stateObject),
-      cache: 'no-store'
+      cache: 'no-store',
+      signal: controller.signal
     });
+    window.clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error('Unable to save remote state');
+    }
   } catch (error) {
-    console.warn('Unable to sync calendar state remotely:', error);
+    if (error.name !== 'AbortError') {
+      console.warn('Unable to sync calendar state remotely:', error);
+    }
   }
 }
 
+function getStateObject() {
+  return Object.fromEntries(calendarState);
+}
+
+function applyRemoteState(data) {
+  let hasChanges = false;
+
+  if (data && typeof data === 'object') {
+    Object.entries(data).forEach(([dateKey, status]) => {
+      if (statusOrder.includes(status)) {
+        const previousStatus = calendarState.get(dateKey);
+        if (previousStatus !== status) {
+          calendarState.set(dateKey, status);
+          hasChanges = true;
+        }
+      }
+    });
+  }
+
+  return hasChanges;
+}
+
 function renderCalendar() {
+  if (!hasCalendarDom()) {
+    return;
+  }
+
   monthLabel.textContent = currentMonth.toLocaleDateString('en', {
     month: 'long',
     year: 'numeric'
@@ -138,10 +233,37 @@ function renderCalendar() {
   }
 }
 
+function startAutoSync() {
+  if (!hasCalendarDom()) {
+    return;
+  }
+
+  window.setInterval(() => {
+    loadRemoteState();
+  }, AUTO_SYNC_INTERVAL_MS);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      loadRemoteState();
+    }
+  });
+}
+
 async function init() {
+  if (!hasCalendarDom()) {
+    return;
+  }
+
   loadLocalState();
   await loadRemoteState();
   renderCalendar();
+  startAutoSync();
 }
 
-init();
+window.addEventListener('beforeunload', saveLocalState);
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init, { once: true });
+} else {
+  init();
+}
