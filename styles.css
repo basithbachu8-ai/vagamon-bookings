@@ -75,8 +75,14 @@ h1 {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
   font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.live-note {
+  margin: 0 0 16px;
+  font-size: 0.9rem;
   color: var(--muted);
 }
 
@@ -125,6 +131,10 @@ h1 {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 8px;
+}
+
+.calendar-grid {
+  align-items: stretch;
 }
 
 .weekday-row {
@@ -217,6 +227,10 @@ h1 {
   .weekday-row,
   .calendar-grid {
     gap: 6px;
+  }
+
+  .calendar-grid {
+    grid-template-columns: repeat(7, minmax(44px, 1fr));
   }
 
   .date-cell {
