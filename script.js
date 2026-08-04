@@ -9,15 +9,16 @@ const statusLabels = {
   hold: 'Hold',
   soldout: 'Sold out'
 };
-const STORAGE_KEY = 'vagamon-bookings-state';
+const STORAGE_URL = 'https://jsonblob.com/api/jsonBlob/019fcd22-c843-7174-b3c0-bbe7b6611408';
+const LOCAL_STORAGE_KEY = 'vagamon-bookings-state';
 
 const today = new Date();
 const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 const calendarState = new Map();
 
-function loadCalendarState() {
+function loadLocalState() {
   try {
-    const savedState = localStorage.getItem(STORAGE_KEY);
+    const savedState = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!savedState) {
       return;
     }
@@ -29,16 +30,49 @@ function loadCalendarState() {
       }
     });
   } catch (error) {
-    console.warn('Unable to load saved calendar state:', error);
+    console.warn('Unable to load local calendar state:', error);
   }
 }
 
-function saveCalendarState() {
+function saveLocalState() {
   const stateObject = Object.fromEntries(calendarState);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(stateObject));
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stateObject));
 }
 
-loadCalendarState();
+async function loadRemoteState() {
+  try {
+    const response = await fetch(STORAGE_URL, { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('Unable to fetch remote state');
+    }
+
+    const data = await response.json();
+    Object.entries(data).forEach(([dateKey, status]) => {
+      if (statusOrder.includes(status)) {
+        calendarState.set(dateKey, status);
+      }
+    });
+    saveLocalState();
+  } catch (error) {
+    loadLocalState();
+  }
+}
+
+async function saveRemoteState() {
+  const stateObject = Object.fromEntries(calendarState);
+  saveLocalState();
+
+  try {
+    await fetch(STORAGE_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(stateObject),
+      cache: 'no-store'
+    });
+  } catch (error) {
+    console.warn('Unable to sync calendar state remotely:', error);
+  }
+}
 
 function renderCalendar() {
   monthLabel.textContent = currentMonth.toLocaleDateString('en', {
@@ -72,15 +106,14 @@ function renderCalendar() {
 
   for (let day = 1; day <= daysInMonth; day += 1) {
     const cell = document.createElement('button');
-    cell.className = 'date-cell available';
     cell.type = 'button';
     const dateKey = `${currentMonth.getFullYear()}-${currentMonth.getMonth() + 1}-${day}`;
     const status = calendarState.get(dateKey) || 'available';
     cell.dataset.status = status;
-    cell.classList.add(status);
+    cell.className = `date-cell ${status}`;
     cell.innerHTML = `<span class="day-number">${day}</span><span class="status-label">${statusLabels[status]}</span>`;
 
-    cell.addEventListener('click', () => {
+    cell.addEventListener('click', async () => {
       const currentStatus = cell.dataset.status || 'available';
       const nextIndex = (statusOrder.indexOf(currentStatus) + 1) % statusOrder.length;
       const nextStatus = statusOrder[nextIndex];
@@ -88,7 +121,7 @@ function renderCalendar() {
       cell.className = `date-cell ${nextStatus}`;
       cell.innerHTML = `<span class="day-number">${day}</span><span class="status-label">${statusLabels[nextStatus]}</span>`;
       calendarState.set(dateKey, nextStatus);
-      saveCalendarState();
+      await saveRemoteState();
     });
 
     calendarGrid.appendChild(cell);
@@ -105,4 +138,10 @@ function renderCalendar() {
   }
 }
 
-renderCalendar();
+async function init() {
+  loadLocalState();
+  await loadRemoteState();
+  renderCalendar();
+}
+
+init();

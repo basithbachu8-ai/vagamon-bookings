@@ -1,6 +1,5 @@
 :root {
   color-scheme: light;
-  --bg: #f4f7f8;
   --card: #ffffff;
   --text: #14313f;
   --muted: #5f7682;
@@ -14,6 +13,10 @@
   box-sizing: border-box;
 }
 
+html {
+  font-size: 16px;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -22,27 +25,31 @@ body {
   color: var(--text);
 }
 
+button {
+  font: inherit;
+}
+
 .app-shell {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: 20px;
 }
 
 .card {
-  width: min(900px, 100%);
+  width: min(940px, 100%);
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 24px;
   box-shadow: 0 20px 50px rgba(20, 49, 63, 0.1);
-  padding: 28px;
+  padding: 24px;
 }
 
 .hero {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .eyebrow {
@@ -55,19 +62,20 @@ body {
 
 h1 {
   margin: 0;
-  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-size: clamp(1.7rem, 3vw, 2.3rem);
 }
 
 .subtitle {
   margin: 8px 0 0;
   color: var(--muted);
+  line-height: 1.5;
 }
 
 .legend {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   font-size: 0.95rem;
   color: var(--muted);
 }
@@ -100,7 +108,7 @@ h1 {
 .calendar-panel {
   border: 1px solid var(--border);
   border-radius: 18px;
-  padding: 16px;
+  padding: 14px;
 }
 
 .calendar-header {
@@ -109,7 +117,7 @@ h1 {
 
 #month-label {
   margin: 0 0 12px;
-  font-size: 1.2rem;
+  font-size: 1.15rem;
 }
 
 .weekday-row,
@@ -143,6 +151,8 @@ h1 {
   flex-direction: column;
   justify-content: space-between;
   align-items: flex-start;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .date-cell:hover {
@@ -179,12 +189,47 @@ h1 {
 }
 
 @media (max-width: 720px) {
+  .app-shell {
+    padding: 10px;
+    align-items: stretch;
+  }
+
   .card {
-    padding: 18px;
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .legend {
+    font-size: 0.85rem;
+    gap: 10px;
+  }
+
+  .calendar-panel {
+    padding: 10px;
+  }
+
+  .weekday-row,
+  .calendar-grid {
+    gap: 6px;
   }
 
   .date-cell {
-    min-height: 64px;
+    min-height: 60px;
     padding: 8px;
+    border-radius: 10px;
+  }
+
+  .date-cell .day-number {
+    font-size: 0.95rem;
+  }
+
+  .date-cell .status-label {
+    font-size: 0.7rem;
   }
 }
